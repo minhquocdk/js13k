@@ -21,11 +21,9 @@ button:hover{filter:brightness(1.3);box-shadow:0 0 24px #39d9ff55}
 "use strict";
 
 const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
-// Độ phân giải khung hình chuẩn 16:9
-const W=1600,H=900;
-// SÂN BÓNG ĐÃ CÂN BẰNG TÂM: x=100, w=1400 (Mép gôn trái=55px, Mép gôn phải=1545px -> Khoảng trống 2 bên đều bằng 55px)
-const FIELD={x:100,y:140,w:1400,h:680,goalDepth:45,goalH:200};
-const GOAL={y:340,h:200};
+const W=1920,H=1080;
+const FIELD={x:120,y:168,w:1680,h:816,goalDepth:54,goalH:240};
+const GOAL={y:408,h:240};
 const TAU=Math.PI*2;
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -541,14 +539,19 @@ canvas.addEventListener("mousemove",e=>{let r=canvas.getBoundingClientRect();gam
 canvas.addEventListener("click",()=>{game.mouse.click=true;audio.init()});
 
 function resize(){
-  const dpr=window.devicePixelRatio||1;
-  const s=Math.min(innerWidth/W,innerHeight/H);
-  canvas.width=W*dpr;
-  canvas.height=H*dpr;
-  canvas.style.width=(W*s)+"px";
-  canvas.style.height=(H*s)+"px";
-  ctx.resetTransform();
-  ctx.scale(dpr*s, dpr*s);
+  const dpr = window.devicePixelRatio || 1;
+  const s = Math.min(innerWidth / W, innerHeight / H);
+
+  // độ phân giải thật
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+
+  // kích thước hiển thị trên màn hình
+  canvas.style.width = (W * s) + "px";
+  canvas.style.height = (H * s) + "px";
+
+  // JS vẫn vẽ bằng hệ tọa độ 1600 × 900
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 addEventListener("resize",resize);resize();
 
