@@ -8,7 +8,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070b18;color:#fff;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
 body{display:flex;align-items:center;justify-content:center}
-canvas{display:block;background:#090e20;box-shadow:0 0 50px #000;image-rendering:pixelated}
+canvas{display:block;background:#090e20;box-shadow:0 0 50px #000}
 button{font:700 18px system-ui;border:1px solid #8eeaff55;color:#eafcff;background:linear-gradient(#18365a,#0b1b32);padding:14px 30px;border-radius:8px;cursor:pointer;box-shadow:0 0 20px #39d9ff22}
 button:hover{filter:brightness(1.3);box-shadow:0 0 24px #39d9ff55}
 #hint{position:fixed;bottom:8px;left:0;right:0;text-align:center;color:#8291ae;font-size:12px;pointer-events:none;text-shadow:0 1px 4px #000}
@@ -16,7 +16,7 @@ button:hover{filter:brightness(1.3);box-shadow:0 0 24px #39d9ff55}
 </head>
 <body>
 <canvas id="game"></canvas>
-<div id="hint">WASD / ARROWS Move · J Kick · H Pass · K Dash · L Attack · U Ult · Q Horn Charge · E Starlight Shield · TAB Switch · ESC Pause</div>
+<div id="hint">Mouse: Move Pointer to Move · Left Click Kick · Right Click Dash · Mid Click Attack | Keyboard: WASD Move · J Kick · H Pass · K Dash · L Attack · U Ult · Q Horn Charge · E Shield · TAB Switch</div>
 <script>
 "use strict";
 
@@ -78,15 +78,53 @@ class Particles{
 const particles=new Particles();
 
 class Input{
-  constructor(){this.down=new Set();this.pressed=new Set();
+  constructor(){
+    this.down=new Set();this.pressed=new Set();
+    this.mousePos={x:W/2,y:H/2};
+    this.mouseActive=false;
+
     addEventListener("keydown",e=>{let k=e.key.toLowerCase();if(!this.down.has(k))this.pressed.add(k);this.down.add(k);
       if(["arrowup","arrowdown","arrowleft","arrowright"," ","tab"].includes(k))e.preventDefault();
       if(k==="escape")game.togglePause(); if(k==="f3")game.debug=!game.debug;});
     addEventListener("keyup",e=>this.down.delete(e.key.toLowerCase()));
+
+    // Lắng nghe sự kiện di chuyển và nhấn chuột
+    canvas.addEventListener("mousemove",e=>{
+      let r=canvas.getBoundingClientRect();
+      this.mousePos.x=(e.clientX-r.left)*W/r.width;
+      this.mousePos.y=(e.clientY-r.top)*H/r.height;
+      this.mouseActive=true;
+    });
+
+    canvas.addEventListener("mousedown",e=>{
+      audio.init();
+      if(e.button===0) this.pressed.add("mouse_left"); // Chuột trái -> Kick
+      if(e.button===2) this.pressed.add("mouse_dash"); // Chuột phải -> Pass
+      if(e.button===1) this.pressed.add("mouse_middle"); // Chuột giữa -> Attack
+      if(e.button===3) this.pressed.add("mouse_right"); // Nút phụ mouse 4 -> Dash
+    });
+
+    // Chống mở menu chuột phải khi click vào game
+    canvas.addEventListener("contextmenu", e=>e.preventDefault());
   }
-  axis(){let x=(this.down.has("d")||this.down.has("arrowright")?1:0)-(this.down.has("a")||this.down.has("arrowleft")?1:0);
+  axis(player){
+    let x=(this.down.has("d")||this.down.has("arrowright")?1:0)-(this.down.has("a")||this.down.has("arrowleft")?1:0);
     let y=(this.down.has("s")||this.down.has("arrowdown")?1:0)-(this.down.has("w")||this.down.has("arrowup")?1:0);
-    let n=norm(x,y); return{x:x||y? n.x:0,y:x||y?n.y:0}}
+    
+    // Nếu có phím điều khiển bàn phím -> Ưu tiên phím
+    if(x!==0 || y!==0){
+      let n=norm(x,y); return{x:n.x, y:n.y};
+    }
+
+    // Nếu di chuột -> Nhân vật đi theo hướng chuột
+    if(this.mouseActive && player){
+      let dx=this.mousePos.x-player.x, dy=this.mousePos.y-player.y;
+      if(Math.hypot(dx,dy)>20){
+        let n=norm(dx,dy); return{x:n.x, y:n.y};
+      }
+    }
+    return{x:0,y:0};
+  }
   take(k){if(this.pressed.has(k)){this.pressed.delete(k);return true}return false}
 }
 const input=new Input();
@@ -148,7 +186,7 @@ class Player{
     this.stun=0;this.kickCD=0;this.dashCD=0;this.attackCD=0;this.dashTime=0;this.faceX=team==="heaven"?1:-1;this.faceY=0;
     this.controlled=false;this.index=index;this.ko=0;this.anim=0;
     
-    // KỸ NĂNG MỚI: Horn Charge & Starlight Shield
+    // KỸ NĂNG: Horn Charge & Starlight Shield
     this.hornChargeCD=0; this.hornCharging=0;
     this.shieldCD=0; this.shieldTimer=0;
   }
@@ -168,11 +206,9 @@ class Player{
 
     if(!this.alive){this.ko-=dt;if(this.ko<=0)this.respawn();return}
 
-    // Cập nhật hiệu ứng Horn Charge
     if(this.hornCharging>0){
       this.hornCharging-=dt;
       particles.trail(this.x,this.y,"#fff27a");
-      // Xử lý va chạm hất văng đối thủ & bóng khi đang lao sừng
       for(const p of game.players){
         if(p.team!==this.team&&p.alive){
           if(dist(this,p)<this.radius+p.radius+12){
@@ -189,7 +225,6 @@ class Player{
       }
     }
 
-    // Cập nhật thời gian Lá chắn Tinh tú
     if(this.shieldTimer>0) this.shieldTimer-=dt;
 
     if(this.stun>0){this.stun-=dt;this.vx*=Math.pow(.05,dt);this.vy*=Math.pow(.05,dt);this.move(dt);return}
@@ -197,17 +232,18 @@ class Player{
     this.move(dt);this.collideBounds();
   }
   human(dt){
-    let a=input.axis();if(a.x||a.y){this.faceX=a.x;this.faceY=a.y}
+    let a=input.axis(this);if(a.x||a.y){this.faceX=a.x;this.faceY=a.y}
     let speed=this.hornCharging>0?1400:this.dashTime>0?950:this.speed;
     this.vx=lerp(this.vx,a.x*speed,.35);this.vy=lerp(this.vy,a.y*speed,.35);
     
-    if(input.take("j"))this.kick();
-    if(input.take("h"))this.pass();
-    if(input.take("k"))this.dash();
-    if(input.take("l"))this.attack();
-    if(input.take("u"))this.useUlt();
-    if(input.take("i"))this.useHornCharge();
-    if(input.take("o"))this.useStarlightShield();
+    // Hỗ trợ cả bàn phím lẫn Chuột
+    if(input.take("j") || input.take("mouse_left")) this.kick();
+    if(input.take("h") || input.take("mouse_right")) this.pass();
+    if(input.take("k") || input.take("mouse_dash")) this.dash();
+    if(input.take("l") || input.take("mouse_middle")) this.attack();
+    if(input.take("u")) this.useUlt();
+    if(input.take("q")) this.useHornCharge();
+    if(input.take("e")) this.useStarlightShield();
   }
   ai(dt){
     const own=this.team==="heaven", enemyGoal={x:own?FIELD.x+FIELD.w:FIELD.x,y:GOAL.y+GOAL.h/2};
@@ -301,7 +337,6 @@ class Player{
       camera.shake(12,.25);
     }
   }
-  // KỸ NĂNG 2: Xung Lực Sừng Kỳ Lân
   useHornCharge(){
     if(!this.alive||this.hornChargeCD>0||game.state!=="playing")return;
     this.hornChargeCD=4.0; this.hornCharging=0.25;
@@ -310,7 +345,6 @@ class Player{
     particles.burst(this.x,this.y,30,"#fff27a",{maxSpeed:350,minSize:3,maxSize:8});
     camera.shake(8,.15); audio.hornCharge();
   }
-  // KỸ NĂNG 3: Vòng Bảo Hộ Tinh Tú
   useStarlightShield(){
     if(!this.alive||this.shieldCD>0||game.state!=="playing")return;
     this.shieldTimer=4.0; this.shieldCD=8.0;
@@ -333,7 +367,6 @@ class Player{
   }
   hit(dmg,kx,ky){
     if(!this.alive)return;
-    // Bỏ qua đòn tấn công nếu đang bật Lá Chắn Tinh Tú
     if(this.shieldTimer>0){
       particles.burst(this.x,this.y,12,"#ffffff",{maxSpeed:160});
       audio.tone(750,.08,"triangle",.04,400);
@@ -350,7 +383,6 @@ class Player{
     ctx.fillStyle=col;ctx.strokeStyle=this.team==="heaven"?"#fff":"#ff9bbd";ctx.lineWidth=2;
     ctx.beginPath();ctx.arc(0,-7,13,0,TAU);ctx.fill();ctx.stroke();
     
-    // Sừng kỳ lân phát sáng rực rỡ khi xài Horn Charge
     let hf=norm(this.faceX||0,this.faceY||-1);
     ctx.save();ctx.shadowBlur=this.hornCharging>0?25:12;ctx.shadowColor=this.hornCharging>0?"#ffffff":"#fff27a";
     let hg=ctx.createLinearGradient(0,-18,hf.x*6,-32);hg.addColorStop(0,this.hornCharging>0?"#ffffff":"#ffe98a");hg.addColorStop(1,"#fff7d6");
@@ -361,7 +393,6 @@ class Player{
     let f=norm(this.faceX,this.faceY);ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(f.x*8-3,f.y*8-10,2.2,0,TAU);ctx.arc(f.x*8+3,f.y*8-10,2.2,0,TAU);ctx.fill();
     ctx.strokeStyle=aura;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-8,25);ctx.lineTo(-12,36+Math.sin(this.anim*10)*2);ctx.moveTo(8,25);ctx.lineTo(12,36-Math.sin(this.anim*10)*2);ctx.stroke();
 
-    // Vẽ Vòng Bảo Hộ Tinh Tú (Starlight Aura)
     if(this.shieldTimer>0){
       ctx.save();
       ctx.shadowBlur=22; ctx.shadowColor="#6ceaff";
@@ -369,7 +400,6 @@ class Player{
       ctx.lineWidth=3.5;
       ctx.beginPath(); ctx.arc(0,0,this.radius+10,0,TAU); ctx.stroke();
       
-      // Các ngôi sao xoay quanh lá chắn
       for(let i=0;i<3;i++){
         let sa=(performance.now()/250)+(i*TAU/3);
         let sx=Math.cos(sa)*(this.radius+10), sy=Math.sin(sa)*(this.radius+10);
@@ -399,7 +429,6 @@ class Game{
     this.createTeams();
   }
   createTeams(){
-    // Đội hình 5v5 cân bằng tuyệt đối
     const specs=[
       ["goalkeeper",.03,.50],
       ["defender",.18,.30],
@@ -463,19 +492,15 @@ function drawBackground(){
   for(let i=0;i<90;i++){let x=(i*173)%W,y=(i*71)%145;ctx.fillStyle="#d8ecff";ctx.globalAlpha=.25+(i%3)*.15;ctx.fillRect(x,y,1.5,1.5)}ctx.globalAlpha=1;
 }
 function drawArena(){
-  // Khung ngoài sân bóng
   ctx.fillStyle="#0c1426";ctx.fillRect(FIELD.x-8,FIELD.y-8,FIELD.w+16,FIELD.h+16);
   let g=ctx.createLinearGradient(FIELD.x,FIELD.y,FIELD.x,FIELD.y+FIELD.h);g.addColorStop(0,"#173d4a");g.addColorStop(1,"#0b2630");ctx.fillStyle=g;ctx.fillRect(FIELD.x,FIELD.y,FIELD.w,FIELD.h);
   ctx.strokeStyle="#65eaff55";ctx.lineWidth=3;ctx.strokeRect(FIELD.x,FIELD.y,FIELD.w,FIELD.h);
   
-  // Đường giữa sân & Vòng tròn trung tâm
   ctx.strokeStyle="#d5ffff55";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(W/2,FIELD.y);ctx.lineTo(W/2,FIELD.y+FIELD.h);ctx.stroke();ctx.beginPath();ctx.arc(W/2,H/2,110,0,TAU);ctx.stroke();
   
-  // Vòng cấm địa 2 bên (Sân đã được căn giữa hoàn hảo)
   ctx.strokeRect(FIELD.x, GOAL.y-40, 180, GOAL.h+80);
   ctx.strokeRect(FIELD.x+FIELD.w-180, GOAL.y-40, 180, GOAL.h+80);
 
-  // Khung thành 2 đội (Nằm đối xứng tuyệt đối)
   drawGoal(FIELD.x, GOAL.y, "#73efff", true);
   drawGoal(FIELD.x+FIELD.w, GOAL.y, "#ff4d91", false);
   
@@ -492,15 +517,11 @@ function drawUI(){
   ctx.fillStyle="#dffcff";ctx.textAlign="center";ctx.font="800 36px system-ui";ctx.fillText(`HEAVEN  ${game.score.heaven} : ${game.score.demon}  DEMON`,W/2,55);
   ctx.font="600 13px system-ui";ctx.fillStyle="#7186a8";ctx.fillText("5V5 MATCH · FIRST TO 5",W/2,80);
   let p=game.players.find(p=>p.controlled);if(p){
-    // Bảng thông số cầu thủ ở góc trái dưới
     ctx.textAlign="left";ctx.fillStyle="#07101caa";ctx.fillRect(25,H-142,320,122);ctx.strokeStyle="#8eeaff33";ctx.lineWidth=1;ctx.strokeRect(25,H-142,320,122);
     ctx.fillStyle="#fff";ctx.font="700 13px system-ui";ctx.fillText(`${p.role.toUpperCase()} • HEAVEN`,38,H-120);
     
-    // Thanh HP
     ctx.fillStyle="#162033";ctx.fillRect(38,H-110,160,7);ctx.fillStyle="#6ceaff";ctx.fillRect(38,H-110,160*p.hp/100,7);
-    // Thanh ULT
     ctx.fillStyle="#162033";ctx.fillRect(38,H-97,160,7);ctx.fillStyle="#ffaa00";ctx.fillRect(38,H-97,160*p.ult/100,7);
-    // Thanh Rainbow Fever
     ctx.fillStyle="#162033";ctx.fillRect(38,H-84,160,7);
     let rg=ctx.createLinearGradient(38,0,198,0);["#ff5c5c","#ffb35c","#ffe75c","#7dff5c","#5cd0ff","#a45cff"].forEach((c,i,a)=>rg.addColorStop(i/(a.length-1),c));
     ctx.fillStyle=rg;ctx.fillRect(38,H-84,160*p.rainbow/100,7);
@@ -509,7 +530,6 @@ function drawUI(){
     ctx.fillText(`HP ${Math.ceil(p.hp)}  DASH(K) ${p.dashCD<=0?"READY":p.dashCD.toFixed(1)+"s"}`,38,H-60);
     ctx.fillText(`ULT(U) ${p.ult>=100?"READY!":Math.ceil(p.ult)+"%"}  🌈 ${p.rainbow>=100?"FEVER!":Math.ceil(p.rainbow)+"%"}`,38,H-44);
     
-    // Hiển thị cooldown 2 kỹ năng mới
     ctx.fillStyle=p.hornChargeCD<=0?"#ffe98a":"#7186a8";
     ctx.fillText(`🦄 HORN CHARGE (I): ${p.hornChargeCD<=0?"READY!":p.hornChargeCD.toFixed(1)+"s"}`,38,H-28);
     ctx.fillStyle=p.shieldCD<=0?"#72efff":"#7186a8";
@@ -525,7 +545,7 @@ function drawMenu(){
   panel("HEAVENLY GOAL","CULTIVATION FOOTBALL (5V5)");
   ctx.fillStyle="#74eaff";ctx.font="900 18px system-ui";ctx.fillText("5V5 EXPANDED ARCADE COMBAT",W/2,H/2-10);
   button(W/2-140,H/2+30,280,58,"START MATCH",()=>game.start());
-  ctx.fillStyle="#7186a8";ctx.font="13px system-ui";ctx.fillText("J Kick · H Pass · K Dash · L Attack · U Ult · I Charge · O Shield · TAB Switch",W/2,H/2+120);
+  ctx.fillStyle="#7186a8";ctx.font="13px system-ui";ctx.fillText("Mouse: Move Pointer to Move · Left Click Kick · Right Click Pass · Mid Click Attack",W/2,H/2+120);
 }
 function drawCountdown(){ctx.textAlign="center";ctx.fillStyle="#eaffff";ctx.font="900 140px system-ui";ctx.shadowBlur=35;ctx.shadowColor="#66eaff";ctx.fillText(game.count>0?game.count:"GO!",W/2,H/2+40);ctx.shadowBlur=0}
 function drawGoal(){ctx.fillStyle="#fff";ctx.textAlign="center";ctx.font="900 76px system-ui";ctx.shadowBlur=30;ctx.shadowColor="#7ff3ff";ctx.fillText(game.message,W/2,H/2-10);ctx.shadowBlur=0;ctx.font="700 22px system-ui";ctx.fillText(`${game.score.heaven} : ${game.score.demon}`,W/2,H/2+45)}
@@ -542,15 +562,12 @@ function resize(){
   const dpr = window.devicePixelRatio || 1;
   const s = Math.min(innerWidth / W, innerHeight / H);
 
-  // độ phân giải thật
-  canvas.width = W * dpr;
-  canvas.height = H * dpr;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
 
-  // kích thước hiển thị trên màn hình
-  canvas.style.width = (W * s) + "px";
-  canvas.style.height = (H * s) + "px";
+  canvas.style.width = Math.round(W * s) + "px";
+  canvas.style.height = Math.round(H * s) + "px";
 
-  // JS vẫn vẽ bằng hệ tọa độ 1600 × 900
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 addEventListener("resize",resize);resize();
