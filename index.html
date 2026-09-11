@@ -315,20 +315,21 @@ class Player{
     if(!this.alive||this.ult<100||game.state!=="playing")return;
     this.ult=0;audio.ult();
     let d=Math.hypot(ball.x-this.x,ball.y-this.y);
-    if(d<=120){
+    if(d<=140){
       let enemyGoalX=this.team==="heaven"?FIELD.x+FIELD.w:FIELD.x;
       let n=norm(enemyGoalX-this.x, (GOAL.y+GOAL.h/2)-this.y);
-      ball.vx=n.x*1650;ball.vy=n.y*1650;ball.ultShot=true;ball.teamPossessor=this.team;
-      particles.burst(ball.x,ball.y,45,"#ffaa00",{maxSpeed:500,minSize:4,maxSize:10});
-      camera.shake(16,.3);
+      ball.vx=n.x*2000;ball.vy=n.y*2000;ball.ultShot=true;ball.teamPossessor=this.team;
+      particles.burst(ball.x,ball.y,60,"#ffaa00",{maxSpeed:600,minSize:4,maxSize:12});
+      camera.shake(25,.4);
     } else {
-      particles.burst(this.x,this.y,50,this.team==="heaven"?"#67e9ff":"#ff3d83",{maxSpeed:400});
+      // Tăng bán kính nổ và sóng xung kích khi không sút bóng
+      particles.burst(this.x,this.y,70,this.team==="heaven"?"#67e9ff":"#ff3d83",{maxSpeed:500,minSize:4,maxSize:10});
       for(const p of game.players){
         if(p.team!==this.team&&p.alive){
-          let pd=dist(p,this);if(pd<280){let n=norm(p.x-this.x,p.y-this.y);p.hit(40,n.x*650,n.y*650)}
+          let pd=dist(p,this);if(pd<350){let n=norm(p.x-this.x,p.y-this.y);p.hit(50,n.x*800,n.y*800)}
         }
       }
-      camera.shake(12,.25);
+      camera.shake(18,.3);
     }
   }
   useHornCharge(){
@@ -561,12 +562,12 @@ function drawUI(){
 
     ctx.fillStyle="#9eb0cb";ctx.font="11px system-ui";
     ctx.fillText(`HP ${Math.ceil(p.hp)}  DASH(K) ${p.dashCD<=0?"READY":p.dashCD.toFixed(1)+"s"}`,38,H-60);
-    ctx.fillText(`ULT(U) ${p.ult>=100?"READY!":Math.ceil(p.ult)+"%"}  🌈 ${p.rainbow>=100?"FEVER!":Math.ceil(p.rainbow)+"%"}`,38,H-44);
+    ctx.fillText(`ULT(R) ${p.ult>=100?"READY!":Math.ceil(p.ult)+"%"}  🌈 ${p.rainbow>=100?"FEVER!":Math.ceil(p.rainbow)+"%"}`,38,H-44);
     
     ctx.fillStyle=p.hornChargeCD<=0?"#ffe98a":"#7186a8";
-    ctx.fillText(`🦄 HORN CHARGE (I): ${p.hornChargeCD<=0?"READY!":p.hornChargeCD.toFixed(1)+"s"}`,38,H-28);
+    ctx.fillText(`🦄 HORN CHARGE (Q): ${p.hornChargeCD<=0?"READY!":p.hornChargeCD.toFixed(1)+"s"}`,38,H-28);
     ctx.fillStyle=p.shieldCD<=0?"#72efff":"#7186a8";
-    ctx.fillText(`🛡️ STARLIGHT SHIELD (O): ${p.shieldTimer>0?"ACTIVE!":p.shieldCD<=0?"READY!":p.shieldCD.toFixed(1)+"s"}`,38,H-12);
+    ctx.fillText(`🛡️ STARLIGHT SHIELD (E): ${p.shieldTimer>0?"ACTIVE!":p.shieldCD<=0?"READY!":p.shieldCD.toFixed(1)+"s"}`,38,H-12);
   }
 }
 
