@@ -16,7 +16,7 @@ button:hover{filter:brightness(1.3);box-shadow:0 0 24px #39d9ff55}
 </head>
 <body>
 <canvas id="game"></canvas>
-<div id="hint">Mouse: Move Pointer to Move · Left Click Kick · Right Click Dash · Mid Click Attack | Keyboard: WASD Move · J Kick · H Pass · K Dash · L Attack · U Ult · Q Horn Charge · E Shield · TAB Switch</div>
+<div id="hint">Mouse: Move Pointer to Move · Left Click Kick · Right Click Dash · Mid Click Attack | Keyboard: WASD Move · J Kick · H Pass · K Dash · L Attack · R Ult · E Horn Charge · Q Shield · TAB Switch</div>
 <script>
 "use strict";
 
@@ -88,7 +88,6 @@ class Input{
       if(k==="escape")game.togglePause(); if(k==="f3")game.debug=!game.debug;});
     addEventListener("keyup",e=>this.down.delete(e.key.toLowerCase()));
 
-    // Lắng nghe sự kiện di chuyển và nhấn chuột
     canvas.addEventListener("mousemove",e=>{
       let r=canvas.getBoundingClientRect();
       this.mousePos.x=(e.clientX-r.left)*W/r.width;
@@ -98,25 +97,22 @@ class Input{
 
     canvas.addEventListener("mousedown",e=>{
       audio.init();
-      if(e.button===0) this.pressed.add("mouse_left"); // Chuột trái -> Kick
-      if(e.button===2) this.pressed.add("mouse_dash"); // Chuột phải -> Pass
-      if(e.button===1) this.pressed.add("mouse_middle"); // Chuột giữa -> Attack
-      if(e.button===3) this.pressed.add("mouse_right"); // Nút phụ mouse 4 -> Dash
+      if(e.button===0) this.pressed.add("mouse_left");
+      if(e.button===2) this.pressed.add("mouse_dash");
+      if(e.button===1) this.pressed.add("mouse_middle");
+      if(e.button===3) this.pressed.add("mouse_right");
     });
 
-    // Chống mở menu chuột phải khi click vào game
     canvas.addEventListener("contextmenu", e=>e.preventDefault());
   }
   axis(player){
     let x=(this.down.has("d")||this.down.has("arrowright")?1:0)-(this.down.has("a")||this.down.has("arrowleft")?1:0);
     let y=(this.down.has("s")||this.down.has("arrowdown")?1:0)-(this.down.has("w")||this.down.has("arrowup")?1:0);
     
-    // Nếu có phím điều khiển bàn phím -> Ưu tiên phím
     if(x!==0 || y!==0){
       let n=norm(x,y); return{x:n.x, y:n.y};
     }
 
-    // Nếu di chuột -> Nhân vật đi theo hướng chuột
     if(this.mouseActive && player){
       let dx=this.mousePos.x-player.x, dy=this.mousePos.y-player.y;
       if(Math.hypot(dx,dy)>20){
@@ -186,7 +182,6 @@ class Player{
     this.stun=0;this.kickCD=0;this.dashCD=0;this.attackCD=0;this.dashTime=0;this.faceX=team==="heaven"?1:-1;this.faceY=0;
     this.controlled=false;this.index=index;this.ko=0;this.anim=0;
     
-    // KỸ NĂNG: Horn Charge & Starlight Shield
     this.hornChargeCD=0; this.hornCharging=0;
     this.shieldCD=0; this.shieldTimer=0;
   }
@@ -236,14 +231,13 @@ class Player{
     let speed=this.hornCharging>0?1400:this.dashTime>0?950:this.speed;
     this.vx=lerp(this.vx,a.x*speed,.35);this.vy=lerp(this.vy,a.y*speed,.35);
     
-    // Hỗ trợ cả bàn phím lẫn Chuột
     if(input.take("j") || input.take("mouse_left")) this.kick();
     if(input.take("h") || input.take("mouse_right")) this.pass();
     if(input.take("k") || input.take("mouse_dash")) this.dash();
     if(input.take("l") || input.take("mouse_middle")) this.attack();
-    if(input.take("u")) this.useUlt();
-    if(input.take("q")) this.useHornCharge();
-    if(input.take("e")) this.useStarlightShield();
+    if(input.take("r")) this.useUlt();
+    if(input.take("e")) this.useHornCharge();
+    if(input.take("q")) this.useStarlightShield();
   }
   ai(dt){
     const own=this.team==="heaven", enemyGoal={x:own?FIELD.x+FIELD.w:FIELD.x,y:GOAL.y+GOAL.h/2};
@@ -260,7 +254,7 @@ class Player{
       if((own&&bx<FIELD.x+FIELD.w*.4)||( !own&&bx>FIELD.x+FIELD.w*.6)){targetX=bx;targetY=by}
     } else if(this.role==="midfielder"){
       targetX=lerp(this.homeX,bx,.5);targetY=lerp(this.homeY,by,.6);
-    } else { // striker
+    } else {
       targetX=own?FIELD.x+FIELD.w-320:FIELD.x+320;targetY=lerp(this.homeY,by,.4);
       if((own&&bx>FIELD.x+FIELD.w*.45)||(!own&&bx<FIELD.x+FIELD.w*.55)){targetX=bx-(own?35:-35);targetY=by}
     }
@@ -425,7 +419,10 @@ class Player{
 
 class Game{
   constructor(){
-    this.state="menu";this.score={heaven:0,demon:0};this.players=[];this.debug=false;this.goalTimer=0;this.message="";this.messageTimer=0;this.lastScorer=null;this.count=3;this.countTimer=0;this.endWinner=null;this.pausedFrom=null;
+    this.state="menu";this.score={heaven:0,demon:0};this.players=[];this.debug=false;
+    this.goalTimer=0;this.goalNoticeTimer=0;this.goalNoticeMsg="";
+    this.rainbowAuraTimer=0;
+    this.lastScorer=null;this.count=3;this.countTimer=0;this.endWinner=null;this.pausedFrom=null;
     this.createTeams();
   }
   createTeams(){
@@ -440,8 +437,24 @@ class Game{
     specs.forEach((s,i)=>this.players.push(new Player("demon",s[0],FIELD.x+FIELD.w*(1-s[1]),FIELD.y+FIELD.h*s[2],i)));
     this.players[3].controlled=true;
   }
-  start(){audio.init();this.score={heaven:0,demon:0};this.players.forEach(p=>p.reset());this.players[3].controlled=true;this.players.filter(p=>p.team==="heaven"&&p!==this.players[3]).forEach(p=>p.controlled=false);ball.reset();this.state="countdown";this.count=3;this.countTimer=0;this.endWinner=null;audio.countdown(3)}
+  start(){audio.init();this.score={heaven:0,demon:0};this.players.forEach(p=>p.reset());this.players[3].controlled=true;this.players.filter(p=>p.team==="heaven"&&p!==this.players[3]).forEach(p=>p.controlled=false);ball.reset();this.state="countdown";this.count=3;this.countTimer=0;this.endWinner=null;this.rainbowAuraTimer=0;this.goalNoticeTimer=0;audio.countdown(3)}
   update(dt){
+    this.rainbowAuraTimer=Math.max(0, this.rainbowAuraTimer-dt);
+    this.goalNoticeTimer=Math.max(0, this.goalNoticeTimer-dt);
+
+    if(this.rainbowAuraTimer>0 && Math.random()<0.35){
+      let edge=Math.floor(Math.random()*4), px=0, py=0;
+      if(edge===0){px=rand(FIELD.x, FIELD.x+FIELD.w); py=FIELD.y;}
+      else if(edge===1){px=FIELD.x+FIELD.w; py=rand(FIELD.y, FIELD.y+FIELD.h);}
+      else if(edge===2){px=rand(FIELD.x, FIELD.x+FIELD.w); py=FIELD.y+FIELD.h;}
+      else {px=FIELD.x; py=rand(FIELD.y, FIELD.y+FIELD.h);}
+      particles.items.push({
+        x:px, y:py, vx:rand(-20,20), vy:rand(-20,20),
+        life:rand(0.3, 0.8), max:0.8, size:rand(3, 7),
+        color:`hsl(${(performance.now()/5 + rand(0,180))%360}, 100%, 70%)`, drag:0.9
+      });
+    }
+
     if(this.state==="countdown"){this.countTimer+=dt;if(this.countTimer>=1){this.countTimer=0;this.count--;if(this.count>0)audio.countdown(this.count);else{this.state="playing";audio.tone(900,.2,"triangle",.05,1300)}}return}
     if(this.state==="goal"){this.goalTimer-=dt;if(this.goalTimer<=0){this.resetAfterGoal();}return}
     if(this.state!=="playing")return;
@@ -449,7 +462,6 @@ class Game{
     this.resolvePlayerCollisions();this.resolveBallPlayers();
     let g=ball.update(dt);if(g)this.goal(g);
     particles.update(dt);camera.update(dt);
-    this.messageTimer=Math.max(0,this.messageTimer-dt);
     
     if(input.take("tab"))this.switchSmartPlayer();
   }
@@ -468,7 +480,11 @@ class Game{
     audio.click();
   }
   goal(team){
-    this.score[team]++;this.state="goal";this.goalTimer=2;this.message="HEAVENLY GOAL!";this.messageTimer=2;camera.shake(18,.45);audio.goal();particles.burst(ball.x,ball.y,70,team==="heaven"?"#bfffff":"#ff4f9a",{maxSpeed:450,maxLife:1});
+    this.score[team]++;this.state="goal";this.goalTimer=2;
+    this.goalNoticeMsg=team==="heaven"?"HEAVENLY GOAL!":"DEMONIC GOAL!";
+    this.goalNoticeTimer=2.0;
+    this.rainbowAuraTimer=2.0;
+    camera.shake(18,.45);audio.goal();particles.burst(ball.x,ball.y,70,team==="heaven"?"#bfffff":"#ff4f9a",{maxSpeed:450,maxLife:1});
     if(this.score[team]>=5){this.endWinner=team;this.goalTimer=2.2}
   }
   resetAfterGoal(){
@@ -481,7 +497,7 @@ class Game{
   render(){
     ctx.clearRect(0,0,W,H);drawBackground();ctx.save();camera.apply();drawArena();
     for(const p of this.players)p.draw();ball.draw();particles.draw();ctx.restore();drawUI();
-    if(this.state==="menu")drawMenu();if(this.state==="countdown")drawCountdown();if(this.state==="goal")drawGoal();if(this.state==="paused")drawPause();if(this.state==="match_end")drawEnd();if(this.debug)drawDebug();
+    if(this.state==="menu")drawMenu();if(this.state==="countdown")drawCountdown();if(this.goalNoticeTimer>0)drawGoalNotice();if(this.state==="paused")drawPause();if(this.state==="match_end")drawEnd();if(this.debug)drawDebug();
   }
 }
 const game=new Game();
@@ -494,7 +510,24 @@ function drawBackground(){
 function drawArena(){
   ctx.fillStyle="#0c1426";ctx.fillRect(FIELD.x-8,FIELD.y-8,FIELD.w+16,FIELD.h+16);
   let g=ctx.createLinearGradient(FIELD.x,FIELD.y,FIELD.x,FIELD.y+FIELD.h);g.addColorStop(0,"#173d4a");g.addColorStop(1,"#0b2630");ctx.fillStyle=g;ctx.fillRect(FIELD.x,FIELD.y,FIELD.w,FIELD.h);
-  ctx.strokeStyle="#65eaff55";ctx.lineWidth=3;ctx.strokeRect(FIELD.x,FIELD.y,FIELD.w,FIELD.h);
+  
+  if(game.rainbowAuraTimer>0){
+    let t=performance.now()/8;
+    let hue=(t%360);
+    ctx.save();
+    ctx.strokeStyle=`hsl(${hue}, 100%, 65%)`;
+    ctx.shadowBlur=25+10*Math.sin(t/100);
+    ctx.shadowColor=`hsl(${hue}, 100%, 60%)`;
+    ctx.lineWidth=8;
+    ctx.strokeRect(FIELD.x-4, FIELD.y-4, FIELD.w+8, FIELD.h+8);
+    
+    ctx.strokeStyle=`hsl(${(hue+60)%360}, 100%, 75%)`;
+    ctx.lineWidth=3;
+    ctx.strokeRect(FIELD.x-10, FIELD.y-10, FIELD.w+20, FIELD.h+20);
+    ctx.restore();
+  } else {
+    ctx.strokeStyle="#65eaff55";ctx.lineWidth=3;ctx.strokeRect(FIELD.x,FIELD.y,FIELD.w,FIELD.h);
+  }
   
   ctx.strokeStyle="#d5ffff55";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(W/2,FIELD.y);ctx.lineTo(W/2,FIELD.y+FIELD.h);ctx.stroke();ctx.beginPath();ctx.arc(W/2,H/2,110,0,TAU);ctx.stroke();
   
@@ -548,7 +581,16 @@ function drawMenu(){
   ctx.fillStyle="#7186a8";ctx.font="13px system-ui";ctx.fillText("Mouse: Move Pointer to Move · Left Click Kick · Right Click Pass · Mid Click Attack",W/2,H/2+120);
 }
 function drawCountdown(){ctx.textAlign="center";ctx.fillStyle="#eaffff";ctx.font="900 140px system-ui";ctx.shadowBlur=35;ctx.shadowColor="#66eaff";ctx.fillText(game.count>0?game.count:"GO!",W/2,H/2+40);ctx.shadowBlur=0}
-function drawGoal(){ctx.fillStyle="#fff";ctx.textAlign="center";ctx.font="900 76px system-ui";ctx.shadowBlur=30;ctx.shadowColor="#7ff3ff";ctx.fillText(game.message,W/2,H/2-10);ctx.shadowBlur=0;ctx.font="700 22px system-ui";ctx.fillText(`${game.score.heaven} : ${game.score.demon}`,W/2,H/2+45)}
+function drawGoalNotice(){
+  ctx.save();
+  let alpha = Math.min(1, game.goalNoticeTimer);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle="#fff";ctx.textAlign="center";ctx.font="900 76px system-ui";ctx.shadowBlur=30;ctx.shadowColor="#7ff3ff";
+  ctx.fillText(game.goalNoticeMsg,W/2,H/2-10);
+  ctx.shadowBlur=0;ctx.font="700 22px system-ui";
+  ctx.fillText(`${game.score.heaven} : ${game.score.demon}`,W/2,H/2+45);
+  ctx.restore();
+}
 function drawPause(){panel("PAUSED","Match suspended");button(W/2-140,H/2-20,280,52,"RESUME",()=>game.togglePause());button(W/2-140,H/2+45,135,52,"RESTART",()=>game.restart());button(W/2+5,H/2+45,135,52,"MAIN MENU",()=>game.mainMenu())}
 function drawEnd(){panel(game.endWinner==="heaven"?"VICTORY":"DEFEAT",`HEAVEN ${game.score.heaven} : ${game.score.demon} DEMON`);button(W/2-140,H/2,135,52,"REMATCH",()=>game.restart());button(W/2+5,H/2,135,52,"MAIN MENU",()=>game.mainMenu())}
 function button(x,y,w,h,label,fn){ctx.fillStyle="#102b49";ctx.strokeStyle="#71eaff88";ctx.lineWidth=2;ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);ctx.fillStyle="#eaffff";ctx.font="800 16px system-ui";ctx.textAlign="center";ctx.fillText(label,x+w/2,y+h/2+6);if(game.mouse&&game.mouse.click&&game.mouse.x>=x&&game.mouse.x<=x+w&&game.mouse.y>=y&&game.mouse.y<=y+h){game.mouse.click=false;fn()}}
